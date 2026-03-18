@@ -1,0 +1,139 @@
+{
+  "name": "Intake Form → Monday.com Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "intake-form",
+        "responseMode": "onReceived",
+        "responseData": "allEntries"
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook: Intake Form",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "webhookId": "intake-form",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "functionCode": "// Map and validate form fields\nconst formData = $input.first().json;\n\nconst fieldMap = {\n  'company_name': 'company_name',\n  'company': 'company_name',\n  'contact_email': 'contact_email',\n  'email': 'contact_email',\n  'project_title': 'project_title',\n  'title': 'project_title',\n  'project_description': 'description',\n  'description': 'description',\n  'development_stage': 'dev_stage',\n  'budget_range': 'budget',\n  'timeline': 'timeline',\n  'technical_requirements': 'tech_requirements',\n  'file_uploads': 'files'\n};\n\nconst requiredFields = ['company_name', 'contact_email', 'project_title', 'description', 'dev_stage'];\n\nconst mapped = {};\nconst errors = [];\n\nfor (const [key, value] of Object.entries(formData)) {\n  const cleanKey = key.trim().toLowerCase().replace(/[\\s-]/g, '_');\n  const colId = fieldMap[cleanKey] || cleanKey;\n  if (value && String(value).trim()) {\n    mapped[colId] = String(value).trim();\n  }\n}\n\nfor (const field of requiredFields) {\n  if (!mapped[field]) {\n    errors.push(`Missing required field: ${field}`);\n  }\n}\n\nmapped.submitted_at = new Date().toISOString();\nmapped.review_status = 'New';\n\nreturn [{\n  json: {\n    valid: errors.length === 0,\n    errors,\n    mapped_data: mapped\n  }\n}];"
+      },
+      "id": "validate-and-map",
+      "name": "Validate & Map Fields",
+      "type": "n8n-nodes-base.function",
+      "position": [470, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "validation-check",
+      "name": "Validation OK?",
+      "type": "n8n-nodes-base.if",
+      "position": [690, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "resource": "boardItem",
+        "operation": "create",
+        "boardId": "={{ $env.MONDAY_BOARD_ID }}",
+        "groupId": "new_submissions",
+        "itemName": "={{ $json.mapped_data.project_title }} — {{ $json.mapped_data.company_name }}",
+        "columnValues": "={{ JSON.stringify($json.mapped_data) }}"
+      },
+      "id": "create-monday-item",
+      "name": "Create Monday.com Item",
+      "type": "n8n-nodes-base.mondayCom",
+      "position": [910, 200],
+      "typeVersion": 1,
+      "credentials": {
+        "mondayComApi": {
+          "id": "1",
+          "name": "Monday.com API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#intake-notifications",
+        "text": "📥 *New Project Submission*\n\n*Project:* {{ $json.mapped_data.project_title }}\n*Company:* {{ $json.mapped_data.company_name }}\n*Contact:* {{ $json.mapped_data.contact_email }}\n*Stage:* {{ $json.mapped_data.dev_stage }}\n*Budget:* {{ $json.mapped_data.budget || 'Not specified' }}\n\n👉 Review in Monday.com",
+        "otherOptions": {}
+      },
+      "id": "slack-notification",
+      "name": "Notify Team (Slack)",
+      "type": "n8n-nodes-base.slack",
+      "position": [1130, 200],
+      "typeVersion": 1,
+      "credentials": {
+        "slackApi": {
+          "id": "2",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Log validation errors\nconst errors = $input.first().json.errors;\nconst formData = $input.first().json.mapped_data || {};\n\nconsole.log('Validation failed:', JSON.stringify(errors));\nconsole.log('Submitted data:', JSON.stringify(formData));\n\nreturn [{\n  json: {\n    status: 'validation_failed',\n    errors: errors,\n    timestamp: new Date().toISOString(),\n    contact_email: formData.contact_email || 'unknown'\n  }\n}];"
+      },
+      "id": "log-errors",
+      "name": "Log Validation Errors",
+      "type": "n8n-nodes-base.function",
+      "position": [910, 420],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourcompany.com",
+        "toEmail": "={{ $env.NOTIFICATION_EMAIL }}",
+        "subject": "⚠️ Intake Form Validation Failed",
+        "text": "A form submission failed validation.\n\nErrors:\n{{ $json.errors.join('\\n') }}\n\nContact: {{ $json.contact_email }}\nTimestamp: {{ $json.timestamp }}"
+      },
+      "id": "error-notification",
+      "name": "Error Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [1130, 420],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Webhook: Intake Form": {
+      "main": [
+        [{ "node": "Validate & Map Fields", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate & Map Fields": {
+      "main": [
+        [{ "node": "Validation OK?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validation OK?": {
+      "main": [
+        [{ "node": "Create Monday.com Item", "type": "main", "index": 0 }],
+        [{ "node": "Log Validation Errors", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Monday.com Item": {
+      "main": [
+        [{ "node": "Notify Team (Slack)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log Validation Errors": {
+      "main": [
+        [{ "node": "Error Alert Email", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
