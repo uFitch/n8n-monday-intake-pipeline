@@ -5,24 +5,16 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "intake-form",
-        "responseMode": "onReceived",
-        "responseData": "allEntries"
+        "options": {}
       },
-      "id": "webhook-trigger",
+      "id": "54b6c8fd-439d-4040-9eeb-404a8d573ef1",
       "name": "Webhook: Intake Form",
       "type": "n8n-nodes-base.webhook",
-      "position": [250, 300],
+      "position": [
+        -656,
+        96
+      ],
       "webhookId": "intake-form",
-      "typeVersion": 1
-    },
-    {
-      "parameters": {
-        "functionCode": "// Map and validate form fields\nconst formData = $input.first().json.body;\n\nconst fieldMap = {\n  'company_name': 'company_name',\n  'company': 'company_name',\n  'contact_email': 'contact_email',\n  'email': 'contact_email',\n  'project_title': 'project_title',\n  'title': 'project_title',\n  'project_description': 'description',\n  'description': 'description',\n  'development_stage': 'dev_stage',\n  'budget_range': 'budget',\n  'timeline': 'timeline',\n  'technical_requirements': 'tech_requirements',\n  'file_uploads': 'files'\n};\n\nconst requiredFields = ['company_name', 'contact_email', 'project_title', 'description', 'dev_stage'];\n\nconst mapped = {};\nconst errors = [];\n\nfor (const [key, value] of Object.entries(formData)) {\n  const cleanKey = key.trim().toLowerCase().replace(/[\\s-]/g, '_');\n  const colId = fieldMap[cleanKey] || cleanKey;\n  if (value && String(value).trim()) {\n    mapped[colId] = String(value).trim();\n  }\n}\n\nfor (const field of requiredFields) {\n  if (!mapped[field]) {\n    errors.push(`Missing required field: ${field}`);\n  }\n}\n\nmapped.submitted_at = new Date().toISOString();\nmapped.review_status = 'New';\n\nreturn [{\n  json: {\n    valid: errors.length === 0,\n    errors,\n    mapped_data: mapped\n  }\n}];"
-      },
-      "id": "validate-and-map",
-      "name": "Validate & Map Fields",
-      "type": "n8n-nodes-base.function",
-      "position": [470, 300],
       "typeVersion": 1
     },
     {
@@ -36,59 +28,45 @@
           ]
         }
       },
-      "id": "validation-check",
+      "id": "bf8fbe7b-523b-4610-909f-585234890ca4",
       "name": "Validation OK?",
       "type": "n8n-nodes-base.if",
-      "position": [690, 300],
+      "position": [
+        -208,
+        96
+      ],
       "typeVersion": 1
     },
     {
       "parameters": {
         "resource": "boardItem",
-        "operation": "create",
         "boardId": "={{ $env.MONDAY_BOARD_ID }}",
         "groupId": "new_submissions",
-        "itemName": "={{ $json.mapped_data.project_title }} — {{ $json.mapped_data.company_name }}",
-        "columnValues": "={{ JSON.stringify($json.mapped_data) }}"
+        "additionalFields": {}
       },
-      "id": "create-monday-item",
+      "id": "8546f3eb-c04d-41b6-96a1-e60ccc00e928",
       "name": "Create Monday.com Item",
       "type": "n8n-nodes-base.mondayCom",
-      "position": [910, 200],
-      "typeVersion": 1,
-      "credentials": {
-        "mondayComApi": {
-          "id": "1",
-          "name": "Monday.com API"
-        }
-      }
+      "position": [
+        16,
+        0
+      ],
+      "typeVersion": 1
     },
     {
       "parameters": {
         "channel": "#intake-notifications",
         "text": "📥 *New Project Submission*\n\n*Project:* {{ $json.mapped_data.project_title }}\n*Company:* {{ $json.mapped_data.company_name }}\n*Contact:* {{ $json.mapped_data.contact_email }}\n*Stage:* {{ $json.mapped_data.dev_stage }}\n*Budget:* {{ $json.mapped_data.budget || 'Not specified' }}\n\n👉 Review in Monday.com",
-        "otherOptions": {}
+        "otherOptions": {},
+        "attachments": []
       },
-      "id": "slack-notification",
+      "id": "5df44de0-9700-43b4-beac-8a1be0457c39",
       "name": "Notify Team (Slack)",
       "type": "n8n-nodes-base.slack",
-      "position": [1130, 200],
-      "typeVersion": 1,
-      "credentials": {
-        "slackApi": {
-          "id": "2",
-          "name": "Slack API"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "functionCode": "// Log validation errors\nconst errors = $input.first().json.errors;\nconst formData = $input.first().json.mapped_data || {};\n\nconsole.log('Validation failed:', JSON.stringify(errors));\nconsole.log('Submitted data:', JSON.stringify(formData));\n\nreturn [{\n  json: {\n    status: 'validation_failed',\n    errors: errors,\n    timestamp: new Date().toISOString(),\n    contact_email: formData.contact_email || 'unknown'\n  }\n}];"
-      },
-      "id": "log-errors",
-      "name": "Log Validation Errors",
-      "type": "n8n-nodes-base.function",
-      "position": [910, 420],
+      "position": [
+        240,
+        0
+      ],
       "typeVersion": 1
     },
     {
@@ -96,44 +74,119 @@
         "fromEmail": "noreply@yourcompany.com",
         "toEmail": "={{ $env.NOTIFICATION_EMAIL }}",
         "subject": "⚠️ Intake Form Validation Failed",
-        "text": "A form submission failed validation.\n\nErrors:\n{{ $json.errors.join('\\n') }}\n\nContact: {{ $json.contact_email }}\nTimestamp: {{ $json.timestamp }}"
+        "text": "A form submission failed validation.\n\nErrors:\n{{ $json.errors.join('\\n') }}\n\nContact: {{ $json.contact_email }}\nTimestamp: {{ $json.timestamp }}",
+        "options": {}
       },
-      "id": "error-notification",
+      "id": "1b2d062d-ccb7-41f9-ab53-a8703b38436a",
       "name": "Error Alert Email",
       "type": "n8n-nodes-base.emailSend",
-      "position": [1130, 420],
+      "position": [
+        240,
+        192
+      ],
       "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map and validate form fields\nconst formData = $input.first().json.body;\n\nconst fieldMap = {\n  'company_name': 'company_name',\n  'company': 'company_name',\n  'contact_email': 'contact_email',\n  'email': 'contact_email',\n  'project_title': 'project_title',\n  'title': 'project_title',\n  'project_description': 'description',\n  'description': 'description',\n  'development_stage': 'dev_stage',\n  'budget_range': 'budget',\n  'timeline': 'timeline',\n  'technical_requirements': 'tech_requirements',\n  'file_uploads': 'files'\n};\n\nconst requiredFields = ['company_name', 'contact_email', 'project_title', 'description', 'dev_stage'];\n\nconst mapped = {};\nconst errors = [];\n\nfor (const [key, value] of Object.entries(formData)) {\n  const cleanKey = key.trim().toLowerCase().replace(/[\\s-]/g, '_');\n  const colId = fieldMap[cleanKey] || cleanKey;\n  if (value && String(value).trim()) {\n    mapped[colId] = String(value).trim();\n  }\n}\n\nfor (const field of requiredFields) {\n  if (!mapped[field]) {\n    errors.push(`Missing required field: ${field}`);\n  }\n}\n\nmapped.submitted_at = new Date().toISOString();\nmapped.review_status = 'New';\n\nreturn [{\n  json: {\n    valid: errors.length === 0,\n    errors,\n    mapped_data: mapped\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        96
+      ],
+      "id": "0cded111-8c19-4f6e-98a4-9468159f7809",
+      "name": "Validate & Map Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log validation errors\nconst errors = $input.first().json.errors;\nconst formData = $input.first().json.mapped_data || {};\n\nconsole.log('Validation failed:', JSON.stringify(errors));\nconsole.log('Submitted data:', JSON.stringify(formData));\n\nreturn [{\n  json: {\n    status: 'validation_failed',\n    errors: errors,\n    timestamp: new Date().toISOString(),\n    contact_email: formData.contact_email || 'unknown'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        192
+      ],
+      "id": "2a2759f2-020e-48ec-917b-5ef6e190c71e",
+      "name": "Log Validation Errors"
     }
   ],
+  "pinData": {},
   "connections": {
     "Webhook: Intake Form": {
       "main": [
-        [{ "node": "Validate & Map Fields", "type": "main", "index": 0 }]
-      ]
-    },
-    "Validate & Map Fields": {
-      "main": [
-        [{ "node": "Validation OK?", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Validate & Map Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Validation OK?": {
       "main": [
-        [{ "node": "Create Monday.com Item", "type": "main", "index": 0 }],
-        [{ "node": "Log Validation Errors", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Create Monday.com Item",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Validation Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Create Monday.com Item": {
       "main": [
-        [{ "node": "Notify Team (Slack)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Notify Team (Slack)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Map Fields": {
+      "main": [
+        [
+          {
+            "node": "Validation OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Log Validation Errors": {
       "main": [
-        [{ "node": "Error Alert Email", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Error Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
+  "active": false,
   "settings": {
-    "executionOrder": "v1"
-  }
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "b7ba05e6-ab9b-4fdb-9285-c0998bad0250",
+  "meta": {
+    "instanceId": "e260aa82b7e187ca68efa4dd0e0d974738c493f446088804fe1b7165276a13d8"
+  },
+  "id": "g347wJyPHgBZFXua",
+  "tags": []
 }
