@@ -2,7 +2,7 @@
 
 Automated intake-to-project pipeline: web form → n8n orchestration → Monday.com project management with multi-phase routing.
 
-![Pipeline](assets/pipeline-diagram.svg)
+![Pipeline](assets/pipeline.png)
 
 ## What It Does
 
