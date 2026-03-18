@@ -1,0 +1,62 @@
+{
+  "name": "Approval → Pipeline Routing",
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "boardItem",
+        "operation": "getUpdates",
+        "boardId": "={{ $env.REVIEW_BOARD_ID }}",
+        "columnId": "review_status",
+        "columnValue": "Approved"
+      },
+      "id": "monday-trigger",
+      "name": "Monday.com: Status Changed to Approved",
+      "type": "n8n-nodes-base.mondayComTrigger",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const item = $input.first().json;\nconst pipelineItem = {\n  item_name: item.name || item.project_title,\n  column_values: {\n    company_name: item.company_name,\n    contact_email: { email: item.contact_email, text: item.contact_email },\n    phase: { label: 'Discovery' },\n    priority: { label: 'Medium' },\n    notes: { text: 'Approved from intake. Original stage: ' + (item.dev_stage || 'N/A') }\n  }\n};\nreturn [{ json: pipelineItem }];"
+      },
+      "id": "prepare-pipeline-item",
+      "name": "Prepare Pipeline Item",
+      "type": "n8n-nodes-base.function",
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "resource": "boardItem",
+        "operation": "create",
+        "boardId": "={{ $env.PIPELINE_BOARD_ID }}",
+        "groupId": "discovery",
+        "itemName": "={{ $json.item_name }}",
+        "columnValues": "={{ JSON.stringify($json.column_values) }}"
+      },
+      "id": "create-pipeline-item",
+      "name": "Create Pipeline Item",
+      "type": "n8n-nodes-base.mondayCom",
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#projects",
+        "text": "Project Approved: {{ $json.item_name }} | Starting Phase: Discovery"
+      },
+      "id": "slack-approved",
+      "name": "Notify: Project Approved",
+      "type": "n8n-nodes-base.slack",
+      "position": [910, 300]
+    }
+  ],
+  "connections": {
+    "Monday.com: Status Changed to Approved": {
+      "main": [[{ "node": "Prepare Pipeline Item", "type": "main", "index": 0 }]]
+    },
+    "Prepare Pipeline Item": {
+      "main": [[{ "node": "Create Pipeline Item", "type": "main", "index": 0 }]]
+    },
+    "Create Pipeline Item": {
+      "main": [[{ "node": "Notify: Project Approved", "type": "main", "index": 0 }]]
+    }
+  }
+}

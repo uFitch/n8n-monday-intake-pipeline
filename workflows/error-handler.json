@@ -1,0 +1,41 @@
+{
+  "name": "Error Handler & Logging",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowIds": ["intake-webhook-processor", "approval-routing"]
+      },
+      "id": "error-trigger",
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const error = $input.first().json;\nconst errorLog = {\n  workflow: error.workflow?.name || 'Unknown',\n  node: error.execution?.lastNodeExecuted || 'Unknown',\n  error_message: error.execution?.error?.message || 'No message',\n  timestamp: new Date().toISOString(),\n  execution_id: error.execution?.id || 'N/A',\n  retry_count: (error.retry_count || 0) + 1,\n  max_retries: 3\n};\nreturn [{ json: errorLog }];"
+      },
+      "id": "format-error",
+      "name": "Format Error Details",
+      "type": "n8n-nodes-base.function",
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#alerts",
+        "text": "Pipeline Error | Workflow: {{ $json.workflow }} | Node: {{ $json.node }} | Error: {{ $json.error_message }} | Retry: {{ $json.retry_count }}/{{ $json.max_retries }}"
+      },
+      "id": "slack-error",
+      "name": "Alert: Error Occurred",
+      "type": "n8n-nodes-base.slack",
+      "position": [690, 300]
+    }
+  ],
+  "connections": {
+    "On Workflow Error": {
+      "main": [[{ "node": "Format Error Details", "type": "main", "index": 0 }]]
+    },
+    "Format Error Details": {
+      "main": [[{ "node": "Alert: Error Occurred", "type": "main", "index": 0 }]]
+    }
+  }
+}
